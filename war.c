@@ -1,18 +1,34 @@
-// ============================================================================
-//         PROJETO WAR ESTRUTURADO - DESAFIO DE CÓDIGO
-// ============================================================================
-//        
-// ============================================================================
-//
-// OBJETIVOS:
-// - Modularizar completamente o código em funções especializadas.
-// - Implementar um sistema de missões para um jogador.
-// - Criar uma função para verificar se a missão foi cumprida.
-// - Utilizar passagem por referência (ponteiros) para modificar dados e
-//   passagem por valor/referência constante (const) para apenas ler.
-// - Foco em: Design de software, modularização, const correctness, lógica de jogo.
-//
-// ============================================================================
+#include <stdio.h>
+#include <string.h>
+struct Territorio {
+    char nome[30];
+    char cor[10];
+    int tropas;
+};
+int main() {
+    struct Territorio territorios[5];
+    printf("=== Cadastro de territorios ===\n\n");
+    for (int i = 0; i < 5; i++) {
+        printf("Territorio %d\n", i + 1);
+        printf("Nome: ");
+        scanf("%s", territorios[i].nome);
+        printf("Cor: ");
+        scanf("%s", territorios[i].cor);
+        printf("Tropas: ");
+        scanf("%d", &territorios[i].tropas);
+        printf("\n");
+    }
+    printf("\n=== Dados cadastrados ===\n\n");
+    for (int i = 0; i < 5; i++) {
+        printf("Territorio %d:\n", i + 1);
+        printf("Nome: %s\n", territorios[i].nome);
+        printf("Cor: %s\n", territorios[i].cor);
+        printf("Tropas: %d\n", territorios[i].tropas);
+        printf("--------------------------\n");
+    }
+    return 0;
+}
+
 
 // Inclusão das bibliotecas padrão necessárias para entrada/saída, alocação de memória, manipulação de strings e tempo.
 
