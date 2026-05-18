@@ -1,268 +1,337 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 #include <time.h>
 
-#define MAX_COMPONENTES 20
-#define MAX_NOME 30
-#define MAX_TIPO 20
-
-// Estrutura que representa cada componente da torre de resgate.
+// Estrutura que representa um território do jogo.
+// Cada território possui um nome, uma cor que identifica o exército dono
+// e a quantidade de tropas estacionadas nele.
 typedef struct {
-    char nome[MAX_NOME];
-    char tipo[MAX_TIPO];
-    int prioridade;
-} Componente;
+    char nome[30];   // nome do território
+    char cor[10];    // cor do exército (dono)
+    int tropas;      // quantidade de tropas
+} Territorio;
 
-long comparacoes_ordenacao = 0;
-long comparacoes_busca = 0;
+// Função auxiliar: stringDuplicate
+// Faz duplicação de string usando malloc para ser compatível com ISO C.
+char* stringDuplicate(const char* origem) {
+    if (origem == NULL) return NULL;
+    size_t tamanho = strlen(origem) + 1;
+    char* copia = (char*) malloc(tamanho);
+    if (copia != NULL) {
+        memcpy(copia, origem, tamanho);
+    }
+    return copia;
+}
 
-void selectionSortPrioridade(Componente componentes[], int quantidade);
-void insertionSortTipo(Componente componentes[], int quantidade);
-void bubbleSortNome(Componente componentes[], int quantidade);
-int buscaBinariaPorNome(Componente componentes[], int quantidade, char chave[]);
-void mostrarComponentes(const Componente componentes[], int quantidade);
-void medirTempo(void (*algoritmo)(Componente[], int), Componente vetor[], int tamanho);
-void cadastrarComponentes(Componente componentes[], int quantidade);
-int lerInteiro(const char *prompt, int *valor, int min, int max);
-void limparBufferEntrada(void);
-void lerString(char destino[], int tamanho);
+// Missões fixas (descrições), usadas para sorteio
+#define TOTAL_MISSOES 5
+#define MAX_MISSAO_LEN 128
+const char* MISSOES_FIXAS_CONST[TOTAL_MISSOES] = {
+    "Conquistar 2 territórios azuis",
+    "Conquistar 3 territórios vermelhos",
+    "Eliminar todas as tropas da cor Azul",
+    "Manter pelo menos 1 território com cor Vermelha",
+    "Conquistar território sem tropas"
+};
 
-int main(void) {
-    Componente componentes[MAX_COMPONENTES];
-    int quantidade = 0;
-    int ordemAtual = 0; // 1 = nome, 2 = tipo, 3 = prioridade
-    int opcao;
+// Função: atribuirMissao
+// Sorteia uma missão de forma aleatória e copia a descrição para o buffer de destino.
+void atribuirMissao(char* destino, char* missoes[], int totalMissoes) {
+    int idx = rand() % totalMissoes; // índice aleatório entre 0 e totalMissoes-1
+    strcpy(destino, missoes[idx]);   // copia a missão para a string do jogador
+}
 
-    printf("=== Torre de Resgate: Preparacao de Componentes ===\n");
-    while (!lerInteiro("Quantos componentes voce deseja cadastrar? (1 a 20): ", &quantidade, 1, MAX_COMPONENTES)) {
-        ;
+// Função: exibirMissao
+// Exibe a missão (somente no início, conforme requerimento)
+void exibirMissao(const char* missao) {
+    printf("Missão: %s\n", missao);
+}
+
+// Função: verificarMissao
+// Verifica se a missão sorteada para o jogador foi cumprida.
+// A lógica de verificação depende do texto exato da missão.
+int verificarMissao(const char* missao, Territorio* mapa, int tamanho) {
+    int i;
+    int countAzul = 0, countVermelho = 0;
+
+    // Conta quantos territórios pertencem a cada cor.
+    for (i = 0; i < tamanho; i++) {
+        if (strcmp(mapa[i].cor, "Azul") == 0) {
+            countAzul++;
+        } else if (strcmp(mapa[i].cor, "Vermelho") == 0) {
+            countVermelho++;
+        }
     }
 
-    cadastrarComponentes(componentes, quantidade);
-
-    do {
-        printf("\n=== Menu de Estrategia ===\n");
-        printf("1. Ordenar por nome (Bubble Sort)\n");
-        printf("2. Ordenar por tipo (Insertion Sort)\n");
-        printf("3. Ordenar por prioridade (Selection Sort)\n");
-        printf("4. Buscar componente-chave por nome (Busca Binaria)\n");
-        printf("5. Exibir componentes atuais\n");
-        printf("0. Sair\n");
-        if (!lerInteiro("Escolha uma opcao: ", &opcao, 0, 5)) {
-            opcao = -1;
+    // Verifica cada missão conhecida usando o estado atual do mapa.
+    if (strcmp(missao, "Conquistar 2 territórios azuis") == 0) {
+        return (countAzul >= 2);
+    } else if (strcmp(missao, "Conquistar 3 territórios vermelhos") == 0) {
+        return (countVermelho >= 3);
+    } else if (strcmp(missao, "Eliminar todas as tropas da cor Azul") == 0) {
+        // Retorna verdadeiro apenas se nenhum território Azul tiver tropas.
+        for (i = 0; i < tamanho; i++) {
+            if (strcmp(mapa[i].cor, "Azul") == 0 && mapa[i].tropas > 0) return 0;
         }
-
-        switch (opcao) {
-            case 1:
-                medirTempo(bubbleSortNome, componentes, quantidade);
-                ordemAtual = 1;
-                mostrarComponentes(componentes, quantidade);
-                break;
-            case 2:
-                medirTempo(insertionSortTipo, componentes, quantidade);
-                ordemAtual = 2;
-                mostrarComponentes(componentes, quantidade);
-                break;
-            case 3:
-                medirTempo(selectionSortPrioridade, componentes, quantidade);
-                ordemAtual = 3;
-                mostrarComponentes(componentes, quantidade);
-                break;
-            case 4: {
-                if (ordemAtual != 1) {
-                    printf("\nA busca binaria so funciona quando os componentes estao ordenados por nome.\n");
-                    break;
-                }
-                char chave[MAX_NOME];
-                printf("Digite o nome do componente-chave para buscar: ");
-                lerString(chave, MAX_NOME);
-                int indice = buscaBinariaPorNome(componentes, quantidade, chave);
-                printf("\nBusca binaria concluida com %ld comparacoes.\n", comparacoes_busca);
-                if (indice >= 0) {
-                    printf("Componente encontrado: %s | Tipo: %s | Prioridade: %d\n",
-                           componentes[indice].nome,
-                           componentes[indice].tipo,
-                           componentes[indice].prioridade);
-                    printf("O componente-chave destravou a ativacao da torre!\n");
-                } else {
-                    printf("Componente nao encontrado. Verifique o nome e tente novamente.\n");
-                }
-                break;
-            }
-            case 5:
-                mostrarComponentes(componentes, quantidade);
-                break;
-            case 0:
-                printf("\nPreparacao concluida. A torre de resgate esta pronta para a retirada.\n");
-                break;
-            default:
-                printf("Opcao invalida. Escolha novamente.\n");
-                break;
+        return 1;
+    } else if (strcmp(missao, "Manter pelo menos 1 território com cor Vermelha") == 0) {
+        // Retorna verdadeiro se existir ao menos um território Vermelho com tropas > 0.
+        for (i = 0; i < tamanho; i++) {
+            if (strcmp(mapa[i].cor, "Vermelho") == 0 && mapa[i].tropas > 0) return 1;
         }
-    } while (opcao != 0);
+        return 0;
+    } else if (strcmp(missao, "Conquistar território sem tropas") == 0) {
+        // Missão cumprida se qualquer território estiver com zero tropas.
+        for (i = 0; i < tamanho; i++) {
+            if (mapa[i].tropas == 0) return 1;
+        }
+        return 0;
+    }
 
+    // Missão desconhecida: considera não cumprida.
     return 0;
 }
 
-// Registra componentes usando fgets para aceitar espacos e evita overflow.
-void cadastrarComponentes(Componente componentes[], int quantidade) {
-    for (int i = 0; i < quantidade; i++) {
-        printf("\nComponente %d de %d\n", i + 1, quantidade);
-        printf("Nome do componente: ");
-        fflush(stdout);
-        lerString(componentes[i].nome, MAX_NOME);
-        printf("Tipo do componente: ");
-        fflush(stdout);
-        lerString(componentes[i].tipo, MAX_TIPO);
+// Função: validarAtaque
+// Verifica se o ataque é permitido entre dois territórios.
+// Regras implementadas:
+// - não pode atacar o próprio território
+// - o atacante deve ter mais de 1 tropa (deve deixar pelo menos uma tropa)
+// - o defensor deve pertencer a um exército inimigo
+bool validarAtaque(const Territorio* atacante, const Territorio* defensor) {
+    if (atacante == NULL || defensor == NULL) return false;
+    if (strcmp(atacante->cor, defensor->cor) == 0) {
+        printf("Ataque inválido: atacante e defensor possuem a mesma cor.\n");
+        return false;
+    }
+    if (atacante->tropas <= 1) {
+        printf("Ataque inválido: o território atacante precisa ter mais de 1 tropa para atacar.\n");
+        return false;
+    }
+    return true;
+}
 
-        while (!lerInteiro("Prioridade (1 a 10): ", &componentes[i].prioridade, 1, 10)) {
-            ;
+// Função: atacar
+// Simula o ataque entre atacante e defensor usando dados aleatórios (1-6)
+void atacar(Territorio* atacante, Territorio* defensor) {
+    if (atacante->tropas <= 0) {
+        printf("Ataque inválido: atacante sem tropas.\n");
+        return;
+    }
+
+    int rollA = (rand() % 6) + 1; // dado do atacante
+    int rollD = (rand() % 6) + 1; // dado do defensor
+
+    printf("\n[ATAQUE] %s (Tropas=%d) vs %s (Tropas=%d)\n",
+           atacante->nome, atacante->tropas, defensor->nome, defensor->tropas);
+    printf("  Dados -> atacante: %d, defensor: %d\n", rollA, rollD);
+
+    if (rollA > rollD) {
+        // atacante vence
+        int transfer = atacante->tropas / 2; // metade das tropas vão para o defensor
+        if (transfer > 0) {
+            defensor->tropas += transfer;
+            atacante->tropas -= transfer;
         }
+        // transfere cor (novo dono do território defensor)
+        strcpy(defensor->cor, atacante->cor);
+        printf("  Resultado: ATACANTE vence! Novo dono do território defensor: %s. Tropas transferidas: %d\n",
+               defensor->cor, transfer);
+    } else {
+        // defensor vence ou empate
+        atacante->tropas -= 1;
+        if (atacante->tropas < 0) atacante->tropas = 0;
+        printf("  Resultado: DEFENSOR vence (ou empate). Atacante perde 1 tropa.\n");
     }
 }
 
-// Mostra a lista de componentes com seu nome, tipo e prioridade.
-void mostrarComponentes(const Componente componentes[], int quantidade) {
-    printf("\n=== Componentes da Torre de Resgate ===\n");
-    printf("%-3s | %-28s | %-18s | %-10s\n", "#", "Nome", "Tipo", "Prioridade");
-    printf("---------------------------------------------------------------------\n");
-    for (int i = 0; i < quantidade; i++) {
-        printf("%-3d | %-28s | %-18s | %-10d\n",
-               i + 1,
-               componentes[i].nome,
-               componentes[i].tipo,
-               componentes[i].prioridade);
+// Função: exibirMapa
+// Mostra todas as informações dos territórios na tela para o jogador.
+void exibirMapa(const Territorio* mapa, int tamanho) {
+    printf("\n=== MAPA ATUAL ===\n");
+    for (int i = 0; i < tamanho; i++) {
+        printf("Território %d: Nome=%s | Cor=%s | Tropas=%d\n",
+               i+1, mapa[i].nome, mapa[i].cor, mapa[i].tropas);
     }
+    printf("====================\n");
 }
 
-// Gera uma busca binaria otimizada para encontrar o componente por nome.
-int buscaBinariaPorNome(Componente componentes[], int quantidade, char chave[]) {
-    int baixo = 0;
-    int alto = quantidade - 1;
-    comparacoes_busca = 0;
+// Função: cadastrarTerritoriosDinam
+// Aloca dinamicamente o vetor de territórios e lê os dados fornecidos pelo usuário.
+Territorio* cadastrarTerritoriosDinam(int n) {
+    Territorio* mapa = (Territorio*) malloc(n * sizeof(Territorio));
+    if (mapa == NULL) return NULL;
 
-    while (baixo <= alto) {
-        int meio = (baixo + alto) / 2;
-        comparacoes_busca++;
-        int resultado = strcmp(chave, componentes[meio].nome);
+    for (int i = 0; i < n; i++) {
+        printf("\nTerritório %d:\n", i + 1);
+        printf("  Nome (max 29): ");
+        scanf("%29s", mapa[i].nome);  // evita overflow do buffer
 
-        if (resultado == 0) {
-            return meio;
+        printf("  Cor do exército: ");
+        scanf("%9s", mapa[i].cor);   // evita overflow do buffer
+
+        printf("  Tropas: ");
+        scanf("%d", &mapa[i].tropas);
+    }
+    return mapa;
+}
+
+// Função: liberarMemoria
+// Libera toda a memória alocada dinamicamente durante o jogo.
+void liberarMemoria(Territorio* mapa,
+                   char** missoesFixas, int totalMissoes,
+                   char** missaoJogadores, int totalJogadores) {
+    // libera as missões fixas
+    if (missoesFixas != NULL) {
+        for (int i = 0; i < totalMissoes; i++) {
+            free(missoesFixas[i]);
         }
-        if (resultado < 0) {
-            alto = meio - 1;
-        } else {
-            baixo = meio + 1;
-        }
+        // missoesFixas é um array local no stack, não deve ser liberado
     }
 
-    return -1;
+    // libera as missões dos jogadores
+    if (missaoJogadores != NULL) {
+        for (int i = 0; i < totalJogadores; i++) {
+            free(missaoJogadores[i]);
+        }
+        free(missaoJogadores);
+    }
+
+    // libera o mapa
+    free(mapa);
 }
 
-// Avalia o tempo de execucao e compara o algoritmo de ordenacao escolhido.
-void medirTempo(void (*algoritmo)(Componente[], int), Componente vetor[], int tamanho) {
-    clock_t inicio = clock();
-    algoritmo(vetor, tamanho);
-    clock_t fim = clock();
-    double tempo = (double)(fim - inicio) / CLOCKS_PER_SEC;
+// ------------------- MAIN -------------------
+// Função principal: controla todo o fluxo do jogo.
+int main() {
+    // Inicializa a semente do gerador para que os resultados de rand() variem a cada execução.
+    srand((unsigned)time(NULL));
 
-    printf("\nOrdenacao concluida em %.6f segundos com %ld comparacoes.\n",
-           tempo,
-           comparacoes_ordenacao);
-}
+    int n;
+    printf("WAR estruturado com missões estratégicas\n");
+    printf("Informe o número total de territórios: ");
+    if (scanf("%d", &n) != 1 || n <= 0) {
+        printf("Entrada inválida de número de territórios.\n");
+        return 1;
+    }
 
-// Ordena por nome usando bubble sort e conta comparacoes de strings.
-void bubbleSortNome(Componente componentes[], int quantidade) {
-    comparacoes_ordenacao = 0;
-    for (int i = 0; i < quantidade - 1; i++) {
-        for (int j = 0; j < quantidade - i - 1; j++) {
-            comparacoes_ordenacao++;
-            if (strcmp(componentes[j].nome, componentes[j + 1].nome) > 0) {
-                Componente temp = componentes[j];
-                componentes[j] = componentes[j + 1];
-                componentes[j + 1] = temp;
+    // Cria o mapa de territórios dinamicamente com base no número informado.
+    Territorio* mapa = cadastrarTerritoriosDinam(n);
+    if (mapa == NULL) {
+        printf("Erro na alocação de memória para o mapa.\n");
+        return 1;
+    }
+
+    // Preparação das missões (dinâmicas)
+    // Duplicamos as missões fixas para que cada string fique em memória alocada.
+    char* missoesFixas[TOTAL_MISSOES];
+    for (int i = 0; i < TOTAL_MISSOES; i++) {
+        missoesFixas[i] = stringDuplicate(MISSOES_FIXAS_CONST[i]);
+        // stringDuplicate aloca memória; precisamos liberar depois
+        if (missoesFixas[i] == NULL) {
+            printf("Erro na alocação de memória para as missões fixas.\n");
+            for (int j = 0; j < i; j++) {
+                free(missoesFixas[j]);
             }
+            free(mapa);
+            return 1;
         }
     }
-}
 
-// Ordena por tipo usando insertion sort e conta comparacoes de strings.
-void insertionSortTipo(Componente componentes[], int quantidade) {
-    comparacoes_ordenacao = 0;
-    for (int i = 1; i < quantidade; i++) {
-        Componente chave = componentes[i];
-        int j = i - 1;
+    // Aloca as strings onde as missões dos jogadores serão armazenadas.
+    const int totalJogadores = 2;
+    char** missaoJogadores = (char**) malloc(totalJogadores * sizeof(char*));
+    if (missaoJogadores == NULL) {
+        printf("Erro na alocação de memória para missões dos jogadores.\n");
+        liberarMemoria(mapa, missoesFixas, TOTAL_MISSOES, NULL, 0);
+        return 1;
+    }
+    for (int i = 0; i < totalJogadores; i++) {
+        missaoJogadores[i] = (char*) malloc(MAX_MISSAO_LEN);
+        if (missaoJogadores[i] == NULL) {
+            printf("Erro na alocação de memória para missão do jogador %d.\n", i + 1);
+            liberarMemoria(mapa, missoesFixas, TOTAL_MISSOES, missaoJogadores, i);
+            return 1;
+        }
+    }
 
-        while (j >= 0) {
-            comparacoes_ordenacao++;
-            if (strcmp(componentes[j].tipo, chave.tipo) > 0) {
-                componentes[j + 1] = componentes[j];
-                j--;
-            } else {
+    // Sorteia e atribui uma missão para cada jogador.
+    atribuirMissao(missaoJogadores[0], missoesFixas, TOTAL_MISSOES);
+    atribuirMissao(missaoJogadores[1], missoesFixas, TOTAL_MISSOES);
+
+    // Exibição das missões apenas no início do jogo.
+    printf("\nMissões sorteadas para cada jogador (início do jogo):\n");
+    exibirMissao(missaoJogadores[0]);
+    exibirMissao(missaoJogadores[1]);
+
+    // Mostra o mapa inicial antes do primeiro ataque.
+    exibirMapa(mapa, n);
+
+    int vencedor = -1;
+    int turno = 1;
+
+    while (1) {
+        printf("\n--- Turno %d ---\n", turno);
+        // Leitura de ataque
+        int idxAtacante, idxDefensor;
+        printf("Selecione o atacante (1..%d): ", n);
+        if (scanf("%d", &idxAtacante) != 1) break;
+        printf("Selecione o defensor (1..%d): ", n);
+        if (scanf("%d", &idxDefensor) != 1) break;
+
+        if (idxAtacante < 1 || idxAtacante > n || idxDefensor < 1 || idxDefensor > n) {
+            printf("Seleção de territórios fora do intervalo. Tente novamente.\n");
+            continue;
+        }
+        if (idxAtacante == idxDefensor) {
+            printf("Não é possível atacar o próprio território.\n");
+            continue;
+        }
+
+        // Ajusta índices de usuário (1..n) para índices de vetor (0..n-1).
+        Territorio* atacante = &mapa[idxAtacante - 1];
+        Territorio* defensor = &mapa[idxDefensor - 1];
+
+        // Valida a ação antes de executar o ataque.
+        if (!validarAtaque(atacante, defensor)) {
+            continue;
+        }
+
+        // Executa o ataque e atualiza os dados dos territórios.
+        atacar(atacante, defensor);
+
+        // Exibe o novo estado do mapa após o ataque.
+        exibirMapa(mapa, n);
+
+        // Verifica se algum dos jogadores cumpriu sua missão no estado atual.
+        for (int j = 0; j < 2; j++) {
+            if (verificarMissao(missaoJogadores[j], mapa, n)) {
+                vencedor = j;
                 break;
             }
         }
-        componentes[j + 1] = chave;
-    }
-}
+        if (vencedor != -1) break;
 
-// Ordena por prioridade usando selection sort e conta comparacoes numéricas.
-void selectionSortPrioridade(Componente componentes[], int quantidade) {
-    comparacoes_ordenacao = 0;
-    for (int i = 0; i < quantidade - 1; i++) {
-        int indiceMenor = i;
-        for (int j = i + 1; j < quantidade; j++) {
-            comparacoes_ordenacao++;
-            if (componentes[j].prioridade < componentes[indiceMenor].prioridade) {
-                indiceMenor = j;
-            }
-        }
-        if (indiceMenor != i) {
-            Componente temp = componentes[i];
-            componentes[i] = componentes[indiceMenor];
-            componentes[indiceMenor] = temp;
-        }
-    }
-}
+        // Pergunta se o usuário deseja continuar o jogo.
+        char continuar = 'n';
+        printf("Deseja continuar? (s/n): ");
+        scanf(" %c", &continuar);
+        if (continuar != 's' && continuar != 'S') break;
 
-// Le uma string com fgets e remove o caracter de nova linha.
-void lerString(char destino[], int tamanho) {
-    if (fgets(destino, tamanho, stdin) == NULL) {
-        destino[0] = '\0';
-        return;
+        turno++;
     }
-    size_t len = strlen(destino);
-    if (len > 0 && destino[len - 1] == '\n') {
-        destino[len - 1] = '\0';
-    }
-}
 
-// Le um inteiro usando fgets e sscanf para evitar problemas com buffers.
-int lerInteiro(const char *prompt, int *valor, int min, int max) {
-    char buffer[64];
-    int numero;
-    printf("%s", prompt);
-    fflush(stdout);
-    if (fgets(buffer, sizeof(buffer), stdin) == NULL) {
-        return 0;
+    if (vencedor == 0) {
+        printf("\nJogador 1 cumpriu a missão e vence! 🎉\n");
+    } else if (vencedor == 1) {
+        printf("\nJogador 2 cumpriu a missão e vence! 🎉\n");
+    } else {
+        printf("\nFim de jogo sem vencedor imediato.\n");
     }
-    if (sscanf(buffer, "%d", &numero) != 1) {
-        printf("Entrada invalida. Digite um numero valido.\n");
-        return 0;
-    }
-    if (numero < min || numero > max) {
-        printf("Valor fora do intervalo. Digite entre %d e %d.\n", min, max);
-        return 0;
-    }
-    *valor = numero;
-    return 1;
-}
 
-// Limpa o resto do buffer de entrada para evitar leituras indesejadas.
-void limparBufferEntrada(void) {
-    int c;
-    while ((c = getchar()) != '\n' && c != EOF) {
-        ;
-    }
+    // Liberação de memória
+    liberarMemoria(mapa, missoesFixas, TOTAL_MISSOES, missaoJogadores, totalJogadores);
+    return 0;
 }
